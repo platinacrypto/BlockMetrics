@@ -1,0 +1,85 @@
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+
+class BlockMetrics:
+    def __init__(self, api_key: str):
+        self.api_url = 'https://api.etherscan.io/api'
+        self.api_key = api_key
+
+    def get_block_details(self, block_number: int) -> dict:
+        params = {
+            'module': 'proxy',
+            'action': 'eth_getBlockByNumber',
+            'tag': hex(block_number),
+            'boolean': 'true',
+            'apikey': self.api_key
+        }
+        response = requests.get(self.api_url, params=params)
+        return response.json().get('result', {})
+
+    def get_block_transactions(self, block_number: int) -> pd.DataFrame:
+        block_data = self.get_block_details(block_number)
+        transactions = block_data.get('transactions', [])
+        tx_data = []
+        for tx in transactions:
+            tx_data.append({
+                'hash': tx['hash'],
+                'from': tx['from'],
+                'to': tx['to'],
+                'value': int(tx['value'], 16),  # Convert from hexadecimal to integer
+                'gas': int(tx['gas'], 16),
+                'gas_price': int(tx['gasPrice'], 16)
+            })
+        return pd.DataFrame(tx_data)
+
+    def analyze_block_metrics(self, block_number: int) -> dict:
+        df = self.get_block_transactions(block_number)
+        if df.empty:
+            return {
+                'block_number': block_number,
+                'total_transactions': 0,
+                'total_gas_used': 0,
+                'total_value_transferred': 0
+            }
+        total_transactions = len(df)
+        total_gas_used = df['gas'].sum()
+        total_value_transferred = df['value'].sum()
+        return {
+            'block_number': block_number,
+            'total_transactions': total_transactions,
+            'total_gas_used': total_gas_used,
+            'total_value_transferred': total_value_transferred
+        }
+
+    def plot_block_metrics(self, block_number: int):
+        metrics = self.analyze_block_metrics(block_number)
+        if not metrics:
+            print("No metrics data found.")
+            return
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        bars = ['Total Transactions', 'Total Gas Used', 'Total Value Transferred']
+        values = [metrics['total_transactions'], metrics['total_gas_used'], metrics['total_value_transferred']]
+
+        ax.bar(bars, values, color=['blue', 'green', 'red'])
+        ax.set_xlabel('Metrics')
+        ax.set_ylabel('Values')
+        ax.set_title(f'Block {block_number} Metrics')
+        plt.show()
+
+# Example Usage
+if __name__ == "__main__":
+    ETHERSCAN_API_KEY = 'YOUR_ETHERSCAN_API_KEY'  # Replace with your Etherscan API key
+
+    block_metrics = BlockMetrics(api_key=ETHERSCAN_API_KEY)
+
+    # Fetch and Display Block Details
+    block_number = 17000000  # Replace with the block number you want to explore
+    block_details = block_metrics.get_block_details(block_number)
+    print(f"Block {block_number} Details:")
+    print(block_details)
+
+    # Analyze and Plot Block Metrics
+    block_metrics.plot_block_metrics(block_number=block_number)
